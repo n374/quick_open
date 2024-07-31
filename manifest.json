@@ -1,0 +1,13 @@
+{
+  "name": "quick open",
+  "description": "quick open a link by select params",
+  "version": "0.1",
+  "background": {
+    "service_worker": "main.js"
+  },
+  "action": {},
+  "omnibox": {
+    "keyword": "o"
+  },
+  "manifest_version": 3
+}
