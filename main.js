@@ -1,19 +1,20 @@
-// 配置对象
-var cfg = {
-    "google": {
+// 配置数组
+var cfg = [
+    {
+        "desc": "google",
         "id": "g",
-        "url": "https://${domain}/search?q=${search}",
+        "url": "https://${location}/search?q=${search}&hl=${location}",
         "params": [
             {
-                "name": "domain",
+                "name": "location",
                 "type": "select",
                 "values": [
                     {
-                        "value": "google.com.hk",
+                        "value": ["google.com.hk", "zh-cn"],
                         "keyword": ["hk", "hongkong"]
                     },
                     {
-                        "value": "google.com.jp",
+                        "value": ["google.com.jp", "jp"],
                         "keyword": ["jp", "japan"]
                     }
                 ]
@@ -24,7 +25,8 @@ var cfg = {
             }
         ]
     },
-    "open": {
+    {
+        "desc": "open",
         "id": "o",
         "url": "https://${domain}/",
         "params": [
@@ -33,14 +35,14 @@ var cfg = {
                 "type": "select",
                 "values": [
                     {
-                        "value": "bing.com",
+                        "value": ["bing.com"],
                         "keyword": ["bing"]
                     }
                 ]
             }
         ]
     }
-};
+];
 
 // 处理omnibox输入
 chrome.omnibox.onInputChanged.addListener((text, suggest) => {
@@ -49,7 +51,7 @@ chrome.omnibox.onInputChanged.addListener((text, suggest) => {
     let parts = text.split(' ');
     let command = parts[0];
 
-    let config = Object.values(cfg).find(c => c.id === command);
+    let config = cfg.find(c => c.id === command);
     if (!config) {
         return;
     }
@@ -62,8 +64,8 @@ chrome.omnibox.onInputChanged.addListener((text, suggest) => {
             let valueObj = params[index].values.find(v => v.keyword.some(k => k.includes(input)));
             if (valueObj) {
                 suggestions.push({
-                    content: valueObj.value,
-                    description: `${params[index].name}: ${valueObj.value}`
+                    content: valueObj.value.join(', '),
+                    description: `${params[index].name}: ${valueObj.value.join(', ')}`
                 });
             }
         }
@@ -79,7 +81,7 @@ chrome.omnibox.onInputEntered.addListener((text) => {
     let parts = text.split(' ');
     let command = parts[0];
 
-    let config = Object.values(cfg).find(c => c.id === command);
+    let config = cfg.find(c => c.id === command);
     if (!config) {
         return;
     }
@@ -96,13 +98,18 @@ chrome.omnibox.onInputEntered.addListener((text) => {
                 paramValues[params[index].name] = params[index].values[0].value;
             }
         } else if (params[index].type === "input") {
-            paramValues[params[index].name] = input;
+            paramValues[params[index].name] = [input];
         }
     });
 
     let url = config.url;
+
+    // 根据每个参数的数组值，依次替换URL中的占位符
     for (let key in paramValues) {
-        url = url.replace(`\${${key}}`, paramValues[key]);
+        let valuesArray = paramValues[key];
+        valuesArray.forEach((value, i) => {
+            url = url.replace(`\${${key}}`, value);
+        });
     }
 
     console.log("Generated URL: ", url);
