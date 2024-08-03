@@ -1,153 +1,200 @@
+// 引入 fuzzysort 库
 importScripts('fuzzysort.min.js');
-// 引入fuzzysort库
-// 确保在项目中正确引入fuzzysort库。如果在浏览器环境中，使用以下脚本标签引入：
-// <script src="https://cdn.jsdelivr.net/npm/fuzzysort@latest/fuzzysort.min.js"></script>
-// 如果在Node.js环境中，请通过npm安装：npm install fuzzysort
 
-// 配置数组
-var cfg = [
-    {
-        "desc": "google",
-        "keyword": "g",
-        "url": "https://${location}/search?q=${search}&hl=${location}",
-        "params": [
-            {
-                "name": "location",
-                "type": "select",
-                "values": [
-                    {
-                        "value": ["google.com.hk", "zh-cn"],
-                        "keyword": ["hk", "hongkong"]
-                    },
-                    {
-                        "value": ["google.com.jp", "jp"],
-                        "keyword": ["jp", "japan"]
-                    }
-                ]
-            },
-            {
-                "name": "search",
-                "type": "input"
-            }
-        ]
-    },
-    {
-        "desc": "open",
-        "keyword": "o",
-        "url": "https://${domain}/",
-        "params": [
-            {
-                "name": "domain",
-                "type": "select",
-                "values": [
-                    {
-                        "value": ["bing.com"],
-                        "keyword": ["bing"]
-                    }
-                ]
-            }
-        ]
-    }
-];
-
-// 设置默认提示
-function setDefaultSuggestions() {
-    let descriptions = cfg.map(config => `<match>${config.keyword}</match> - <dim>${config.desc}</dim>`);
-    let description = descriptions.join(' | ');
-    chrome.omnibox.setDefaultSuggestion({
-        description: `Available commands: ${description}`
-    });
-}
-
-// 高亮匹配字符函数
-function highlightMatch(input, keyword) {
-    let result = fuzzysort.single(input, keyword);
-    console.log(`Highlighting match: input=${input}, keyword=${keyword}`);
-    console.log(`Fuzzysort result:`, result);
-
-    if (result && result.indexes) {
-        let highlighted = '';
-        for (let i = 0; i < keyword.length; i++) {
-            highlighted += result.indexes.includes(i) ? `<match>${keyword[i]}</match>` : keyword[i];
+// 配置对象，将原来的 cfg 结构作为 pattern 的值
+var cfg = {
+    "pattern": [
+        {
+            "desc": "google",
+            "keyword": "g",
+            "url": "https://${location}/search?ie=${ie}&q=${search}&hl=${location}",
+            "params": [
+                {
+                    "name": "location",
+                    "type": "select",
+                    "values": [
+                        {
+                            "value": ["google.com.hk", "zh-cn"],
+                            "keyword": ["hk", "hongkong"]
+                        },
+                        {
+                            "value": ["google.com.jp", "jp"],
+                            "keyword": ["jp", "japan"]
+                        }
+                    ]
+                },
+                {
+                    "name": "ie",
+                    "type": "select",
+                    "values": [
+                        {
+                            "value": "UTF-8",
+                            "keyword": ["UTF-8"]
+                        },
+                        {
+                            "value": "UTF-16",
+                            "keyword": ["UTF-16"]
+                        }
+                    ]
+                },
+                {
+                    "name": "search",
+                    "type": "input"
+                }
+            ]
+        },
+        {
+            "desc": "open",
+            "keyword": "o",
+            "url": "https://${domain}/",
+            "params": [
+                {
+                    "name": "domain",
+                    "type": "select",
+                    "values": [
+                        {
+                            "value": ["bing.com"],
+                            "keyword": ["bing"]
+                        }
+                    ]
+                }
+            ]
         }
-        return highlighted;
-    }
-    return keyword; // 如果没有匹配结果，则返回原始关键字
+    ]
+};
+
+// 设置默认建议，用于用户刚进入 Omnibox 或输入无效的命令时
+function setDefaultSuggestions() {
+    const defaultSuggestions = cfg.pattern.map(item => {
+        return {
+            content: item.keyword,  // 用户选择时会填入这个内容
+            description: `${item.keyword} - ${item.desc}`  // 显示在下拉列表中的描述
+        };
+    });
+
+    // 设置默认建议，显示所有可用的 actions
+    chrome.omnibox.setDefaultSuggestion({
+        description: "Available actions: " + defaultSuggestions.map(s => s.description).join(", ")
+    });
+
+    console.log("Default suggestions set: ", defaultSuggestions);
 }
 
-// 当用户进入Omnibar时显示默认提示
-chrome.omnibox.onInputStarted.addListener(() => {
-    console.log("Omnibox input started");
-    setDefaultSuggestions();
-});
+// 高亮匹配字符的函数
+function highlightMatch(input, keyword, indexes) {
+    let highlighted = '';
+    let lastIndex = 0;
+    indexes.forEach(index => {
+        highlighted += keyword.substring(lastIndex, index) + '<match>' + keyword[index] + '</match>';
+        lastIndex = index + 1;
+    });
+    highlighted += keyword.substring(lastIndex);
+    return highlighted;
+}
 
-// 处理Omnibar输入变化时的提示
+// 处理 Omnibox 输入变化时的提示
 chrome.omnibox.onInputChanged.addListener((text, suggest) => {
     console.log("User input: ", text);
 
-    let parts = text.split(' ');
-    let command = parts[0];
-    let input = parts.slice(1).join(' ');
-
-    let config = cfg.find(c => c.keyword === command);
-    if (!config) {
-        console.log("No configuration found for command:", command);
+    if (text.trim() === "") {
+        // 用户没有输入内容时，显示默认建议
+        setDefaultSuggestions();
         return;
     }
 
-    let suggestions = [];
+    let parts = text.split(' ');
+    let command = parts[0];
+
+    // 查找匹配的配置
+    let config = cfg.pattern.find(c => c.keyword === command);
+    if (!config) {
+        console.log("No configuration found for command:", command);
+        // 如果没有匹配的 command，返回默认建议
+        setDefaultSuggestions();
+        return;
+    }
+
+    // 用户开始输入参数阶段
     let params = config.params;
-    let currentParamIndex = parts.length - 2; // 当前正在输入的参数索引
-    console.log(`Current parameter index: ${currentParamIndex}`);
+    let currentParamIndex = parts.length - 2; // 减去 command 和当前参数
+    let input = parts[currentParamIndex + 1] || ""; // 当前输入的部分
 
-    if (currentParamIndex >= 0 && currentParamIndex < params.length) {
+    let suggestions = [];
+    let matchedResults = [];
+    let unmatchedResults = [];
+
+    if (currentParamIndex < params.length) {
         let param = params[currentParamIndex];
-        console.log(`Current parameter: ${param.name}, Input: ${input}`);
-        
-        if (param.type === "select") {
-            let matchedResults = [];
-            let unmatchedResults = [];
 
+        // 如果是 select 类型的参数，使用模糊匹配
+        if (param.type === "select") {
             param.values.forEach(valueObj => {
                 valueObj.keyword.forEach(keyword => {
                     let result = fuzzysort.single(input, keyword);
-                    console.log(`Fuzzysort result for keyword "${keyword}":`, result);
-                    
-                    // 检查是否有匹配
-                    if (result && result.score > -10000) {
+
+                    if (result) {
+                        // 匹配结果
                         matchedResults.push({
                             content: `${parts.slice(0, currentParamIndex + 1).join(' ')} ${keyword}`,
-                            description: `${param.name}: ${highlightMatch(input, keyword)} - ${valueObj.value.join(', ')}`
+                            description: `${param.name}: ${highlightMatch(input, keyword, result.indexes)} - ${Array.isArray(valueObj.value) ? valueObj.value.join(', ') : valueObj.value}`,
+                            score: result.score
                         });
                     } else {
-                        // 如果没有匹配，将未匹配项添加到unmatchedResults中
+                        // 未匹配结果
                         unmatchedResults.push({
                             content: `${parts.slice(0, currentParamIndex + 1).join(' ')} ${keyword}`,
-                            description: `${param.name}: ${highlightMatch(input, keyword)} - ${valueObj.value.join(', ')}`
+                            description: `${param.name}: ${keyword} - ${Array.isArray(valueObj.value) ? valueObj.value.join(', ') : valueObj.value}`
                         });
                     }
                 });
             });
 
-            // 按匹配度排序，优先显示匹配度高的结果
+            // 根据匹配度对匹配结果进行排序
             matchedResults.sort((a, b) => b.score - a.score);
-            // 合并匹配结果和未匹配结果
-            suggestions = matchedResults.concat(unmatchedResults).slice(0, 10);
-            console.log("Suggestions:", suggestions);
+            suggestions = matchedResults.concat(unmatchedResults).slice(0, 10); // 限制最多显示10个结果
         }
+
+        suggest(suggestions);
+        console.log("Suggestions: ", suggestions);
     }
 
-    suggest(suggestions);
+    // 设置 Default Suggestion 显示当前已输入的和默认值
+    let defaultSuggestion = config.params.map((param, index) => {
+        let paramInput = parts[index + 1];
+        if (paramInput) {
+            if (param.type === "select") {
+                let valueObj = param.values.find(valueObj => fuzzysort.single(paramInput, valueObj.keyword));
+                let match = fuzzysort.single(paramInput, valueObj.keyword);
+                return `${param.name}: ${match ? highlightMatch(paramInput, valueObj.keyword, match.indexes) : paramInput}`;
+            } else {
+                return `${param.name}: ${paramInput}`;
+            }
+        } else {
+            // 显示默认值
+            if (param.type === "select") {
+                let defaultValue = param.values[0].value;
+                return `${param.name}: ${Array.isArray(defaultValue) ? defaultValue.join(', ') : defaultValue}`;
+            } else {
+                return `${param.name}: `;
+            }
+        }
+    }).join(' | ');
+
+    chrome.omnibox.setDefaultSuggestion({
+        description: defaultSuggestion
+    });
+    console.log("Default suggestion: ", defaultSuggestion);
 });
 
-// 处理Omnibar提交
+// 处理 Omnibox 提交
 chrome.omnibox.onInputEntered.addListener((text) => {
     console.log("User submitted: ", text);
 
     let parts = text.split(' ');
     let command = parts[0];
 
-    let config = cfg.find(c => c.keyword === command);
+    // 查找匹配的配置
+    let config = cfg.pattern.find(c => c.keyword === command);
     if (!config) {
         console.log("No configuration found for command:", command);
         return;
@@ -157,26 +204,21 @@ chrome.omnibox.onInputEntered.addListener((text) => {
     let paramValues = {};
 
     parts.slice(1).forEach((input, index) => {
-        if (params[index] && params[index].type === "select") {
+        if (params[index].type === "select") {
             let valueObj = params[index].values.find(v => v.keyword.some(k => k.includes(input)));
             if (valueObj) {
                 paramValues[params[index].name] = valueObj.value;
             } else {
-                paramValues[params[index].name] = params[index].values[0].value;
+                paramValues[params[index].name] = Array.isArray(params[index].values[0].value) ? params[index].values[0].value[0] : params[index].values[0].value;
             }
-        } else if (params[index] && params[index].type === "input") {
-            paramValues[params[index].name] = [input];
+        } else if (params[index].type === "input") {
+            paramValues[params[index].name] = input;
         }
     });
 
     let url = config.url;
-
-    // 根据每个参数的数组值，依次替换URL中的占位符
     for (let key in paramValues) {
-        let valuesArray = paramValues[key];
-        valuesArray.forEach((value, i) => {
-            url = url.replace(`\${${key}}`, value);
-        });
+        url = url.replace(new RegExp(`\\\${${key}}`, 'g'), paramValues[key]);
     }
 
     console.log("Generated URL: ", url);
