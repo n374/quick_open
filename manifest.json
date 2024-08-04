@@ -3,7 +3,8 @@
   "description": "quick open a link by select params",
   "version": "0.1",
   "background": {
-    "service_worker": "main.js"
+    "service_worker": "src/main.js",
+    "type": "module"
   },
   "action": {},
   "omnibox": {
