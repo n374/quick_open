@@ -15,11 +15,11 @@ const cfg = {
                     "values": [
                         {
                             "value": ["google.com.hk", "zh-cn"],
-                            "keyword": ["hk", "hongkong"]
+                            "keyword": "hk"
                         },
                         {
                             "value": ["google.com.jp", "jp"],
-                            "keyword": ["jp", "japan"]
+                            "keyword": "jp"
                         }
                     ]
                 },
@@ -29,11 +29,11 @@ const cfg = {
                     "values": [
                         {
                             "value": "UTF-8",
-                            "keyword": ["UTF-8"]
+                            "keyword": "UTF-8"
                         },
                         {
                             "value": "UTF-16",
-                            "keyword": ["UTF-16"]
+                            "keyword": "UTF-16"
                         }
                     ]
                 },
@@ -53,8 +53,8 @@ const cfg = {
                     "type": "select",
                     "values": [
                         {
-                            "value": ["bing.com"],
-                            "keyword": ["bing"]
+                            "value": "bing.com",
+                            "keyword": "bing"
                         }
                     ]
                 }
@@ -79,140 +79,180 @@ function highlightMatch(keyword, match) {
     return highlighted;
 }
 
-// 设置Default Suggestion，展示当前参数的状态
-function setDefaultSuggestions(parts, config) {
-    let description = '';
 
-    config.params.forEach((param, index) => {
-        let inputValue = parts[index + 1] || '';
-        let displayValue = '';
+// Helper function: Generate suggestions based on input
+function getSuggestions(input, items, itemType) {
+    let matchedResults = [];
+    let unmatchedResults = [];
 
-        if (inputValue) {
-            if (param.type === 'select') {
-                // 尝试模糊匹配当前输入
-                let bestMatch = null;
-                param.values.forEach(valueObj => {
-                    valueObj.keyword.forEach(keyword => {
-                        let match = fuzzysort.single(inputValue, keyword);
-                        if (match && (!bestMatch || match.score > bestMatch.score)) {
-                            bestMatch = match;
-                            displayValue = Array.isArray(valueObj.value) ? valueObj.value.join(', ') : valueObj.value;
-                        }
-                    });
-                });
-                if (bestMatch) {
-                    inputValue = highlightMatch(inputValue, bestMatch);
-                } else {
-                    displayValue = Array.isArray(param.values[0].value) ? param.values[0].value.join(', ') : param.values[0].value;
-                }
-            } else {
-                displayValue = inputValue;
-            }
+    items.forEach(item => {
+        let match = fuzzysort.single(input, item.keyword);
+        if (match) {
+            matchedResults.push({
+                score: match._score,
+                content: itemType === 'pattern' ? item.keyword : item.keyword,
+                description: itemType === 'pattern'
+                    ? highlightMatch(item.keyword, match)
+                    : `${itemType}: ${highlightMatch(item.keyword, match)} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
+            });
         } else {
-            // 如果未输入，使用默认值
-            if (param.type === 'select') {
-                displayValue = Array.isArray(param.values[0].value) ? param.values[0].value.join(', ') : param.values[0].value;
-            } else {
-                displayValue = '';
-            }
+            unmatchedResults.push({
+                content: itemType === 'pattern' ? item.keyword : item.keyword,
+                description: itemType === 'pattern'
+                    ? item.keyword
+                    : `${itemType}: ${item.keyword} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
+            });
         }
-
-        description += `${param.name}: ${inputValue || displayValue} | `;
     });
 
-    // 去掉最后一个' | '符号
-    description = description.slice(0, -3);
+    // Sort matched results by score (higher score first)
+    matchedResults.sort((a, b) => b.score - a.score);
 
-    chrome.omnibox.setDefaultSuggestion({
-        description
+    // Strip out the score before returning
+    let finalMatchedResults = matchedResults.map(result => {
+        const { score, ...rest } = result; // Remove score property
+        return rest;
     });
+
+    return finalMatchedResults.concat(unmatchedResults).slice(0, 15);
+}
+
+// 处理输入并生成补全数组
+function processInput(text) {
+    let parts = text.trim().split(' ');
+    if (text.endsWith(' ')) parts.push(''); // 如果最后是空格，表示已经开始输入下一个元素
+
+    let command = parts[0];
+    let config = cfg.pattern.find(c => c.keyword === command);
+    let completionArray = [];
+
+    if (config) {
+        let params = config.params;
+        parts.slice(1).forEach((input, index) => {
+            let param = params[index];
+            if (param.type === "select") {
+                let bestMatch = param.values.find(valueObj =>
+                    fuzzysort.single(input, valueObj.keyword)
+                );
+                completionArray.push(bestMatch ? bestMatch.value : param.values[0].value);
+            } else if (param.type === "input") {
+                completionArray.push(input);
+            }
+        });
+
+        // 对于尚未输入的参数，使用默认值补全
+        for (let i = completionArray.length; i < params.length; i++) {
+            completionArray.push(params[i].type === 'select' ? params[i].values[0].value : '');
+        }
+    }
+
+    return { parts, completionArray };
 }
 
 // Listener方法: 处理omnibox输入
 export function handleInputChanged(text, suggest) {
     console.log("User input: ", text);
 
-    let parts = text.split(' ');
-    let command = parts[0];
-    let config = cfg.pattern.find(c => c.keyword === command);
+    let { parts, completionArray } = processInput(text);
 
-    // Action阶段提示
-    if (!config) {
-        let suggestions = cfg.pattern.map(c => ({
-            content: c.keyword,
-            description: c.desc
-        }));
+    if (parts.length === 0) {
+        // 未输入时，提示所有pattern
+        let suggestions = getSuggestions('', cfg.pattern, 'pattern');
         suggest(suggestions);
-        return;
-    }
+    } else if (parts.length === 1) {
+        // 输入了第一个部分时，提示匹配的pattern
+        let suggestions = getSuggestions(parts[0], cfg.pattern, 'pattern');
+        suggest(suggestions);
+    } else {
+        // 输入了pattern和参数，提供参数的suggestion
+        let command = parts[0];
+        let config = cfg.pattern.find(c => c.keyword === command);
+        if (!config) return;
 
-    let params = config.params;
-    let currentParamIndex = parts.length - 2;
-    let currentParam = params[currentParamIndex];
-    let suggestions = [];
+        let currentParamIndex = parts.length - 2;
+        let currentParam = config.params[currentParamIndex];
+        let suggestions = [];
 
-    // 当前参数模糊匹配
-    if (currentParam && currentParam.type === "select") {
-        let input = parts[currentParamIndex + 1] || '';
-        let matchedResults = [];
-        let unmatchedResults = [];
-
-        currentParam.values.forEach(valueObj => {
-            valueObj.keyword.forEach(keyword => {
-                let match = fuzzysort.single(input, keyword);
-                if (match) {
-                    matchedResults.push({
-                        content: `${parts.slice(0, currentParamIndex + 1).join(' ')} ${keyword}`,
-                        description: `${currentParam.name}: ${highlightMatch(keyword, match)} - ${Array.isArray(valueObj.value) ? valueObj.value.join(', ') : valueObj.value}`
-                    });
-                } else {
-                    unmatchedResults.push({
-                        content: `${parts.slice(0, currentParamIndex + 1).join(' ')} ${keyword}`,
-                        description: `${currentParam.name}: ${keyword} - ${Array.isArray(valueObj.value) ? valueObj.value.join(', ') : valueObj.value}`
-                    });
-                }
+        if (currentParam && currentParam.type === "select") {
+            let input = parts[currentParamIndex + 1] || '';
+            suggestions = getSuggestions(input, currentParam.values, currentParam.name);
+        } else if (currentParam && currentParam.type === "input") {
+            suggestions.push({
+                content: text,
+                description: "Please input any string"
             });
+        }
+
+        // 显示默认suggestion
+        chrome.omnibox.setDefaultSuggestion({
+            description: completionArray.join(' | ')
         });
-
-        matchedResults.sort((a, b) => b.score - a.score);
-
-        suggestions = matchedResults.concat(unmatchedResults).slice(0, 10);
+        suggest(suggestions);
     }
-
-    setDefaultSuggestions(parts, config);
-    suggest(suggestions);
 }
+
 
 // Listener方法: 处理omnibox提交
 export function handleInputEntered(text) {
     console.log("User submitted: ", text);
 
-    let parts = text.split(' ');
+    // 将用户输入拆分为数组
+    let parts = text.trim().split(' ');
+    if (text.endsWith(' ')) {
+        parts.push(''); // 如果输入以空格结尾，增加一个空字符串
+    }
+
     let command = parts[0];
     let config = cfg.pattern.find(c => c.keyword === command);
 
-    if (!config) return;
+    if (!config) {
+        console.log('No matching pattern found');
+        return;
+    }
 
     let params = config.params;
     let paramValues = {};
 
+    // 遍历用户输入的参数，匹配对应的配置
     parts.slice(1).forEach((input, index) => {
         let param = params[index];
         if (param.type === "select") {
             let valueObj = param.values.find(v => v.keyword.includes(input));
-            paramValues[param.name] = valueObj ? valueObj.value : param.values[0].value;
+            if (valueObj) {
+                paramValues[param.name] = valueObj.value;
+            } else {
+                console.log(`No matching value for parameter: ${param.name}`);
+                paramValues[param.name] = param.values[0].value;
+            }
         } else if (param.type === "input") {
-            paramValues[param.name] = input;
+            paramValues[param.name] = [input];
         }
     });
 
+    // 对于用户未提供的参数，设置为默认值（即配置的第一个值）
+    params.forEach(param => {
+        if (!paramValues.hasOwnProperty(param.name)) {
+            paramValues[param.name] = param.type === "select" ? param.values[0].value : [''];
+        }
+    });
+
+    // 构造最终URL
     let url = config.url;
+
     for (let key in paramValues) {
-        let value = Array.isArray(paramValues[key]) ? paramValues[key][0] : paramValues[key];
-        url = url.replace(`\${${key}}`, value);
+        let valuesArray = Array.isArray(paramValues[key]) ? paramValues[key] : [paramValues[key]];
+        
+        // 遍历数组中的每个值并替换对应的占位符
+        valuesArray.forEach(value => {
+            url = url.replace(`\${${key}}`, value);
+        });
     }
 
+    console.log("Final URL: ", url);
+
+    // 打开新标签页
     chrome.tabs.create({ url: url });
+    console.log("created URL: ", url);
 }
 
 // 注册事件

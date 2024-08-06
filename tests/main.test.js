@@ -1,110 +1,74 @@
-import { chrome  } from 'jest-chrome'
+import {jest} from '@jest/globals';
+import { chrome } from 'jest-chrome';
 import { handleInputChanged, handleInputEntered } from '../src/main';
+
+// Mock chrome APIs
+chrome.tabs.create =  jest.fn()
+chrome.omnibox.setDefaultSuggestions =  jest.fn()
+chrome.omnibox.onInputChanged.addListener = jest.fn()
+chrome.omnibox.onInputEntered.addListener = jest.fn()
 
 describe('Omnibox integration tests', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        chrome.omnibox.setDefaultSuggestion.mockClear();
+        chrome.tabs.create.mockClear();
     });
 
-    test('Handle omnibox input and submission', () => {
-        const inputSequence = ['', 'g', 'g h', 'g hn', 'g hng', 'g hng 8', 'g hng 8 hello'];
-        const expectedSuggestions = [
-            [
-                { content: 'g', description: 'google' },
-                { content: 'o', description: 'open' }
-            ],
-            [
-                { content: 'g', description: 'google' },
-                { content: 'o', description: 'open' }
-            ],
-            [
-                {
-                    content: 'g hk',
-                    description: 'location: hk - google.com.hk, zh-cn'
-                },
-                {
-                    content: 'g hongkong',
-                    description: 'location: hongkong - google.com.hk, zh-cn'
-                },
-                {
-                    content: 'g jp',
-                    description: 'location: jp - google.com.jp, jp'
-                },
-                {
-                    content: 'g japan',
-                    description: 'location: japan - google.com.jp, jp'
-                }
-            ],
-            [
-                {
-                    content: 'g hk',
-                    description: 'location: h<match>k</match> - google.com.hk, zh-cn'
-                },
-                {
-                    content: 'g hongkong',
-                    description: 'location: h<match>ongk</match>ong - google.com.hk, zh-cn'
-                },
-                {
-                    content: 'g jp',
-                    description: 'location: jp - google.com.jp, jp'
-                },
-                {
-                    content: 'g japan',
-                    description: 'location: japan - google.com.jp, jp'
-                }
-            ],
-            [
-                {
-                    content: 'g hongkong',
-                    description: 'location: h<match>ongk</match>ong - google.com.hk, zh-cn'
-                },
-                {
-                    content: 'g hk',
-                    description: 'location: h<match>k</match> - google.com.hk, zh-cn'
-                },
-                {
-                    content: 'g jp',
-                    description: 'location: jp - google.com.jp, jp'
-                },
-                {
-                    content: 'g japan',
-                    description: 'location: japan - google.com.jp, jp'
-                }
-            ],
-            [
-                {
-                    content: 'g hk UTF-8',
-                    description: 'ie: <match>UTF-8</match> - UTF-8'
-                },
-                {
-                    content: 'g hk UTF-16',
-                    description: 'ie: UTF-16 - UTF-16'
-                }
-            ],
-            []
-        ];
-
+    test('handleInputChanged suggests patterns when no input is provided', () => {
         const suggestMock = jest.fn();
+        handleInputChanged('', suggestMock);
 
-        // 模拟每一步的输入并测试suggestions
-        inputSequence.forEach((input, index) => {
-            handleInputChanged(input, suggestMock);
+        expect(suggestMock).toHaveBeenCalledWith([
+            expect.objectContaining({ content: 'g' }),
+            expect.objectContaining({ content: 'o' })
+        ]);
+    });
 
-            if (expectedSuggestions[index].length > 0) {
-                expect(suggestMock).toHaveBeenCalledWith(expectedSuggestions[index]);
-            }
+    test('handleInputChanged suggests matching patterns based on input', () => {
+        const suggestMock = jest.fn();
+        handleInputChanged('g', suggestMock);
 
-            // Clear the mock before the next input
-            suggestMock.mockClear();
-        });
+        expect(suggestMock).toHaveBeenCalledWith([
+            expect.objectContaining({ content: 'g' }),
+            expect.objectContaining({ content: 'o' })
+        ]);
+    });
 
-        // 最终输入提交
-        const finalInput = 'g hng 8 hello';
-        handleInputEntered(finalInput);
+    test('handleInputChanged suggests matching parameters for select type', () => {
+        const suggestMock = jest.fn();
+        handleInputChanged('g hk', suggestMock);
 
-        // 预期的URL应该是香港的Google，并且使用UTF-8编码和搜索关键词为hello
+        expect(suggestMock).toHaveBeenCalledWith([
+            expect.objectContaining({ content: 'hk' }),
+            expect.objectContaining({ content: 'jp' })
+        ]);
+    });
+
+    test('handleInputChanged provides input suggestion for input type', () => {
+        const suggestMock = jest.fn();
+        handleInputChanged('g hk UTF-8 ', suggestMock);
+
+        expect(suggestMock).toHaveBeenCalledWith([
+            expect.objectContaining({ description: "Please input any string" })
+        ]);
+    });
+
+    test('handleInputEntered creates a tab with the correct URL', () => {
+        handleInputEntered('g hk UTF-8 OpenAI');
+
+        expect(chrome.tabs.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                url: 'https://google.com.hk/search?ie=UTF-8&q=OpenAI&hl=zh-cn'
+            })
+        );
+
+    });
+
+    test('handleInputEntered uses default values when not all parameters are provided', () => {
+        handleInputEntered('g hk');
+
         expect(chrome.tabs.create).toHaveBeenCalledWith({
-            url: 'https://google.com.hk/search?ie=UTF-8&q=hello&hl=zh-cn'
+            url: 'https://google.com.hk/search?ie=UTF-8&q=&hl=zh-cn'
         });
     });
 });

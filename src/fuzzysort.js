@@ -1,8 +1,8 @@
 // https://github.com/farzher/fuzzysort v3.0.2
 
 var root = {}
-export function single() {
-    return root['fuzzysort']['single']
+export function single(search, target) {
+    return root['fuzzysort']['single'](search, target)
 }
 
 // UMD (Universal Module Definition) for fuzzysort
