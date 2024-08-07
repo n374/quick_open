@@ -10,5 +10,9 @@
   "omnibox": {
     "keyword": "o"
   },
+  "permissions": [
+      "storage"
+  ],
+  "options_page": "src/options/index.html",
   "manifest_version": 3
 }

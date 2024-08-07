@@ -2,7 +2,7 @@
 import * as fuzzysort from './fuzzysort.js';
 
 // 新建的cfg对象
-const cfg = {
+let cfg = {
     pattern: [
         {
             "desc": "google",
@@ -62,6 +62,29 @@ const cfg = {
         }
     ]
 };
+
+// 加载配置
+async function loadConfig() {
+    try {
+        const result = await chrome.storage.sync.get(['userConfig']);
+        cfg = result.userConfig || defaultConfig;
+        console.log("Configuration loaded:", cfg);
+    } catch (error) {
+        console.error("Failed to load configuration:", error);
+        cfg = defaultConfig;
+    }
+}
+
+// 监听配置变更
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.userConfig) {
+        cfg = changes.userConfig.newValue || defaultConfig;
+        console.log("Configuration updated:", cfg);
+    }
+});
+
+// 初始化时加载配置
+loadConfig();
 
 // Helper function: Highlight matching characters in suggestion
 function highlightMatch(keyword, match) {
