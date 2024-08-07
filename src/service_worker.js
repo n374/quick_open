@@ -2,8 +2,25 @@
 import * as fuzzysort from './fuzzysort.js';
 
 // 新建的cfg对象
-let cfg = {
+const defaultCfg = {
     pattern: [
+        {
+            desc: "stackoverflow",
+            keyword: "s",
+            url: "https://stackoverflow.com/questions/tagged/${tag}",
+            params: [
+                {
+                    name: "tag",
+                    type: "select",
+                    values: [
+                        { value: "python", keyword: "python" },
+                        { value: "golang", keyword: "golang" },
+                        { value: "java", keyword: "java" },
+                        { value: "javascript", keyword: "javascript" },
+                    ]
+                }
+            ]
+        },
         {
             "desc": "google",
             "keyword": "g",
@@ -42,26 +59,12 @@ let cfg = {
                     "type": "input"
                 }
             ]
-        },
-        {
-            "desc": "open",
-            "keyword": "o",
-            "url": "https://${domain}/",
-            "params": [
-                {
-                    "name": "domain",
-                    "type": "select",
-                    "values": [
-                        {
-                            "value": "bing.com",
-                            "keyword": "bing"
-                        }
-                    ]
-                }
-            ]
         }
     ]
 };
+
+chrome.storage.session.set({ defaultCfg: defaultCfg })
+let cfg = defaultCfg
 
 // 加载配置
 async function loadConfig() {
@@ -71,7 +74,6 @@ async function loadConfig() {
         console.log("Configuration loaded:", cfg);
     } catch (error) {
         console.error("Failed to load configuration:", error);
-        cfg = defaultConfig;
     }
 }
 

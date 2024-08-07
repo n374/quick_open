@@ -3,7 +3,7 @@
   "description": "quick open a link by select params",
   "version": "0.1",
   "background": {
-    "service_worker": "src/main.js",
+    "service_worker": "src/service_worker.js",
     "type": "module"
   },
   "action": {},
@@ -13,6 +13,6 @@
   "permissions": [
       "storage"
   ],
-  "options_page": "src/options/index.html",
+  "options_page": "src/options.html",
   "manifest_version": 3
 }

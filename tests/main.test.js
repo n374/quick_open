@@ -1,6 +1,6 @@
 import {jest} from '@jest/globals';
 import { chrome } from 'jest-chrome';
-import { handleInputChanged, handleInputEntered } from '../src/main';
+import { handleInputChanged, handleInputEntered } from '../src/service_worker/main';
 
 // Mock chrome APIs
 chrome.tabs.create =  jest.fn()
