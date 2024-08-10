@@ -1,12 +1,16 @@
 import {jest} from '@jest/globals';
 import { chrome } from 'jest-chrome';
-import { handleInputChanged, handleInputEntered } from '../src/service_worker/main';
+
+global.in_jest = true
 
 // Mock chrome APIs
 chrome.tabs.create =  jest.fn()
 chrome.omnibox.setDefaultSuggestions =  jest.fn()
 chrome.omnibox.onInputChanged.addListener = jest.fn()
 chrome.omnibox.onInputEntered.addListener = jest.fn()
+//chrome.storage.session.set = jest.fn()
+
+import { handleInputChanged, handleInputEntered } from '../src/service_worker';
 
 describe('Omnibox integration tests', () => {
     beforeEach(() => {
@@ -19,8 +23,8 @@ describe('Omnibox integration tests', () => {
         handleInputChanged('', suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({ content: 'g' }),
-            expect.objectContaining({ content: 'o' })
+            expect.objectContaining({ content: 'st' }),
+            expect.objectContaining({ content: 'g' })
         ]);
     });
 
@@ -30,7 +34,7 @@ describe('Omnibox integration tests', () => {
 
         expect(suggestMock).toHaveBeenCalledWith([
             expect.objectContaining({ content: 'g' }),
-            expect.objectContaining({ content: 'o' })
+            expect.objectContaining({ content: 'st' })
         ]);
     });
 

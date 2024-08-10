@@ -1,23 +1,28 @@
 // 引入 fuzzysort 库
 import * as fuzzysort from './fuzzysort.js';
+import * as jvr from "./json_var_resolver.js";
+
 
 // 新建的cfg对象
 const defaultCfg = {
+    vari: {
+        "tag_params_values": [
+            { value: "python", keyword: "python" },
+            { value: "golang", keyword: "golang" },
+            { value: "java", keyword: "java" },
+            { value: "javascript", keyword: "javascript" },
+        ]
+    },
     pattern: [
         {
-            desc: "stackoverflow",
-            keyword: "s",
+            desc: "stackoverflow by tag",
+            keyword: "st",
             url: "https://stackoverflow.com/questions/tagged/${tag}",
             params: [
                 {
                     name: "tag",
                     type: "select",
-                    values: [
-                        { value: "python", keyword: "python" },
-                        { value: "golang", keyword: "golang" },
-                        { value: "java", keyword: "java" },
-                        { value: "javascript", keyword: "javascript" },
-                    ]
+                    values: "%%_vari.tag_params_values_%%"
                 }
             ]
         },
@@ -63,15 +68,20 @@ const defaultCfg = {
     ]
 };
 
-chrome.storage.session.set({ defaultCfg: defaultCfg })
-let cfg = defaultCfg
+let cfg = jvr.resolve(defaultCfg)
+console.log(cfg)
+console.log(JSON.stringify(cfg))
 
 // 加载配置
 async function loadConfig() {
     try {
-        const result = await chrome.storage.sync.get(['userConfig']);
-        cfg = result.userConfig || defaultConfig;
-        console.log("Configuration loaded:", cfg);
+        // jest-chrome not support storage session API
+        if (typeof process === 'undefined' || process.env.JEST_WORKER_ID == undefined) {
+            chrome.storage.session.set({ defaultCfg: defaultCfg })
+            const result = await chrome.storage.sync.get(['userConfig']);
+            cfg = jvr.resolve(result.userConfig || defaultConfig);
+            console.log("Configuration loaded:", cfg);
+        }
     } catch (error) {
         console.error("Failed to load configuration:", error);
     }
@@ -80,7 +90,7 @@ async function loadConfig() {
 // 监听配置变更
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && changes.userConfig) {
-        cfg = changes.userConfig.newValue || defaultConfig;
+        cfg = jvr.resolve(changes.userConfig.newValue || defaultConfig);
         console.log("Configuration updated:", cfg);
     }
 });
@@ -117,15 +127,15 @@ function getSuggestions(input, items, itemType) {
                 score: match._score,
                 content: itemType === 'pattern' ? item.keyword : item.keyword,
                 description: itemType === 'pattern'
-                    ? highlightMatch(item.keyword, match)
-                    : `${itemType}: ${highlightMatch(item.keyword, match)} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
+                ? `pattern: ${highlightMatch(item.keyword, match)} - ${item.desc}`
+                : `${itemType}: ${highlightMatch(item.keyword, match)} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
             });
         } else {
             unmatchedResults.push({
                 content: itemType === 'pattern' ? item.keyword : item.keyword,
                 description: itemType === 'pattern'
-                    ? item.keyword
-                    : `${itemType}: ${item.keyword} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
+                ? `pattern: ${item.keyword} - ${item.desc}`
+                : `${itemType}: ${item.keyword} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
             });
         }
     });
@@ -157,7 +167,7 @@ function processInput(text) {
             let param = params[index];
             if (param.type === "select") {
                 let bestMatch = param.values.find(valueObj =>
-                    fuzzysort.single(input, valueObj.keyword)
+                fuzzysort.single(input, valueObj.keyword)
                 );
                 completionArray.push(bestMatch ? bestMatch.value : param.values[0].value);
             } else if (param.type === "input") {
@@ -179,9 +189,9 @@ export function handleInputChanged(text, suggest) {
     console.log("User input: ", text);
 
     let { parts, completionArray } = processInput(text);
-
     if (parts.length === 0) {
-        // 未输入时，提示所有pattern
+        // those code will not run, since empty text still prodcue one empty
+        // element in parts
         let suggestions = getSuggestions('', cfg.pattern, 'pattern');
         suggest(suggestions);
     } else if (parts.length === 1) {
@@ -266,18 +276,18 @@ export function handleInputEntered(text) {
 
     for (let key in paramValues) {
         let valuesArray = Array.isArray(paramValues[key]) ? paramValues[key] : [paramValues[key]];
-        
+
         // 遍历数组中的每个值并替换对应的占位符
         valuesArray.forEach(value => {
-            url = url.replace(`\${${key}}`, value);
-        });
-    }
+        url = url.replace(`\${${key}}`, value);
+    });
+}
 
-    console.log("Final URL: ", url);
+console.log("Final URL: ", url);
 
-    // 打开新标签页
-    chrome.tabs.create({ url: url });
-    console.log("created URL: ", url);
+// 打开新标签页
+chrome.tabs.create({ url: url });
+console.log("created URL: ", url);
 }
 
 // 注册事件
