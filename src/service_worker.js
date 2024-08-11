@@ -22,7 +22,7 @@ const defaultCfg = {
                 {
                     name: "tag",
                     type: "select",
-                    values: "%%_vari.tag_params_values_%%"
+                    values: "${.vari.tag_params_values}"
                 }
             ]
         },
@@ -69,14 +69,12 @@ const defaultCfg = {
 };
 
 let cfg = jvr.resolve(defaultCfg)
-console.log(cfg)
-console.log(JSON.stringify(cfg))
 
 // 加载配置
 async function loadConfig() {
     try {
         // jest-chrome not support storage session API
-        if (typeof process === 'undefined' || process.env.JEST_WORKER_ID == undefined) {
+        if (typeof process === 'undefined' || process.env.JEST_WORKER_ID === undefined) {
             chrome.storage.session.set({ defaultCfg: defaultCfg })
             const result = await chrome.storage.sync.get(['userConfig']);
             cfg = jvr.resolve(result.userConfig || defaultConfig);

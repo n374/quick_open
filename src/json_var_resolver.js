@@ -1,3 +1,5 @@
+import jq from './jq.js'
+
 export function resolve(input) {
     return new JsonVariableResolver().resolve(input);
 }
@@ -18,28 +20,31 @@ class JsonVariableResolver {
     resolve(json) {
         const result = JSON.parse(JSON.stringify(json)); // 深拷贝输入的 JSON
 
-        while (!this.resolveAll(result, result)) {}
+        while (!this.resolveAll(result)) {
+        }
+        console.log(result)
         return result;
     }
 
     /**
      * Resolve all variables in the JSON object.
-     * @param {Object} currentObject - The current object being processed.
-     * @param {Object} rootObject - The root object, used to resolve paths.
-     * @returns {number} - The count of unresolved variables after the current pass.
+     * @param {Object} root - The root object being processed.
+     * @returns {boolean} - The count of unresolved variables after the current pass.
      */
-    resolveAll(currentObject, rootObject) {
+    resolveAll(root) {
         this.unresolvedCount = 0;
         this.resolvedCount = 0;
-        this.traverseAndResolve(currentObject, rootObject, []);
-        if (this.resolvedCount != 0) {
+        let varList = this.traverse(root);
+        this.checkAndResolve(root, varList)
+        if (this.resolvedCount !== 0) {
             return false
         }
-        if (this.unresolvedCount == 0) {
+        if (this.unresolvedCount === 0) {
             return true
         }
         if (this.unresolvedCount > 0) {
-            const errorMessage = `Circular reference detected at path: ${this.pathHistory.get(this.pathHistory.keys().next().value)}`;
+            let path = [...new Set(varList.map(v => v.originalValue))].sort().join(", ")
+            const errorMessage = `Circular reference exists or variable not resolvable: ${path}`;
             console.log(errorMessage);
             throw new Error(errorMessage);
         }
@@ -48,43 +53,56 @@ class JsonVariableResolver {
     /**
      * Traverse the JSON object and resolve variables if possible.
      * @param {Object} currentObject - The current object being processed.
-     * @param {Object} rootObject - The root object, used to resolve paths.
-     * @param {Array<string>} currentPath - The current path in the JSON tree.
+     * @return
      */
-    traverseAndResolve(currentObject, rootObject, currentPath) {
-        for (const key in currentObject) {
-            const value = currentObject[key];
-            const newPath = [...currentPath, key];
+    traverse(currentObject) {
+        const variablesToResolve = [];
+        const currentPath = []
 
-            if (typeof value != 'string') {
-                // 继续深度遍历
-                this.traverseAndResolve(value, rootObject, newPath);
-                continue
+        const collectVariables = (obj, path) => {
+            for (const key in obj) {
+                const value = obj[key];
+                const newPath = [...path, key];
+
+                if (typeof value != "string") {
+                    collectVariables(value, newPath);
+                } else {
+                    const match = value.match(/^\${(.+)}$/);
+                    if (match) {
+                        variablesToResolve.push({
+                            path: newPath,
+                            variablePath: match[1],
+                            originalValue: value
+                        });
+                    }
+                }
             }
+        };
+        collectVariables(currentObject, currentPath);
+        return variablesToResolve
+    }
 
-            // not a variable, skip
-            const match = value.match(/^\${(.+)}$/);
-            if (!match) {
-                continue
-            }
+    checkAndResolve(root, variablesToResolve) {
+        for (const variable of variablesToResolve) {
+            const resolvedValue = this.getValueFromPath(root, variable.variablePath);
 
-            const variablePath = match[1];
-            const resolvedValue = this.getValueFromPath(rootObject, variablePath);
-
-            // not resolveable, skip
-            if (resolvedValue == undefined) {
+            if (resolvedValue === undefined) {
                 this.unresolvedCount++;
-                continue
+                continue;
             }
-            // 检测循环引用
-            if (this.checkAndRecordCircularReference(newPath, variablePath)) {
-                const errorMessage = `Circular reference detected at path: ${newPath.join('.')}`;
+
+            if (this.checkAndRecordCircularReference(variable.path, variable.variablePath)) {
+                let path = [...new Set(variablesToResolve.map(v => v.originalValue))].sort().join(", ")
+                const errorMessage = `Circular reference detected, variable: ${path}`;
                 console.log(errorMessage);
                 throw new Error(errorMessage);
             }
 
-            // 解析变量
-            currentObject[key] =  JSON.parse(JSON.stringify(resolvedValue));
+            let currentObj = root;
+            for (let i = 0; i < variable.path.length - 1; i++) {
+                currentObj = currentObj[variable.path[i]];
+            }
+            currentObj[variable.path[variable.path.length - 1]] = JSON.parse(JSON.stringify(resolvedValue));
             this.resolvedCount++;
         }
     }
@@ -117,32 +135,20 @@ class JsonVariableResolver {
      * @throws {Error} - Throws an error if array index is out of bounds.
      */
     getValueFromPath(object, path) {
-        const parts = path.split('.');
-        let result = object;
+        let filter = jq.compile(path)
 
-        for (let part of parts) {
-            const arrayMatch = part.match(/^(.+)\[(\d+)\]$/);
-            if (arrayMatch) {
-                const [, arrayName, index] = arrayMatch;
-                result = result[arrayName];
-                if (!Array.isArray(result)) {
-                    return undefined;
-                }
-                const arrayIndex = parseInt(index, 10);
-                if (arrayIndex >= 0 && arrayIndex < result.length) {
-                    result = result[arrayIndex];
+        let outputStr = ''
+        try {
+            for (let i of filter(object)) {
+                if (typeof i == 'undefined') {
+                    return undefined
                 } else {
-                    throw new Error(`Array index out of bounds: ${path}`);
+                    outputStr += jq.prettyPrint(i) + '\n'
                 }
-            } else {
-                result = result[part];
             }
-
-            if (result === undefined) {
-                return undefined;
-            }
+            return JSON.parse(outputStr)
+        } catch (e) {
+            return undefined
         }
-
-        return result;
     }
 }
