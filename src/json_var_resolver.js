@@ -22,7 +22,6 @@ class JsonVariableResolver {
 
         while (!this.resolveAll(result)) {
         }
-        console.log(result)
         return result;
     }
 

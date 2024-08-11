@@ -5,8 +5,8 @@ import * as jvr from "./json_var_resolver.js";
 
 // 新建的cfg对象
 const defaultCfg = {
-    vari: {
-        "tag_params_values": [
+    "var": {
+        "so_tag": [
             { value: "python", keyword: "python" },
             { value: "golang", keyword: "golang" },
             { value: "java", keyword: "java" },
@@ -22,7 +22,7 @@ const defaultCfg = {
                 {
                     name: "tag",
                     type: "select",
-                    values: "${.vari.tag_params_values}"
+                    values: "${.var.so_tag}"
                 }
             ]
         },
@@ -77,11 +77,16 @@ async function loadConfig() {
         if (typeof process === 'undefined' || process.env.JEST_WORKER_ID === undefined) {
             chrome.storage.session.set({ defaultCfg: defaultCfg })
             const result = await chrome.storage.sync.get(['userConfig']);
-            cfg = jvr.resolve(result.userConfig || defaultConfig);
+            cfg = jvr.resolve(result.userConfig || defaultCfg);
             console.log("Configuration loaded:", cfg);
         }
     } catch (error) {
         console.error("Failed to load configuration:", error);
+        try {
+            cfg = jvr.resolve(defaultCfg);
+        } catch (error) {
+            console.error("Failed to load default configuration:", error);
+        }
     }
 }
 
@@ -291,3 +296,6 @@ console.log("created URL: ", url);
 // 注册事件
 chrome.omnibox.onInputChanged.addListener(handleInputChanged);
 chrome.omnibox.onInputEntered.addListener(handleInputEntered);
+chrome.action.onClicked.addListener(() => {
+    chrome.runtime.openOptionsPage();
+});

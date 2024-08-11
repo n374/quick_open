@@ -6,12 +6,14 @@
     "service_worker": "src/service_worker.js",
     "type": "module"
   },
-  "action": {},
+  "action": {
+    "default_icon": "src/dist/icon.png"
+  },
   "omnibox": {
     "keyword": "o"
   },
   "permissions": [
-      "storage"
+    "storage"
   ],
   "options_page": "src/options.html",
   "manifest_version": 3

@@ -1,3 +1,4 @@
+import * as jvr from "./json_var_resolver.js";
 // Utility function to merge default config with user config
 function mergeConfig(userConfig, defaultConfig) {
     return userConfig || defaultConfig;
@@ -19,6 +20,7 @@ async function loadConfig() {
 async function saveConfig() {
     try {
         const userConfig = JSON.parse(document.getElementById('config-input').value);
+        jvr.resolve(userConfig);
         await chrome.storage.sync.set({ userConfig });
         alert('Configuration saved successfully!');
     } catch (e) {
