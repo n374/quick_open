@@ -1,16 +1,17 @@
 import {jest} from '@jest/globals';
-import { chrome } from 'jest-chrome';
+import {chrome} from 'jest-chrome';
 
 global.in_jest = true
 
 // Mock chrome APIs
-chrome.tabs.create =  jest.fn()
-chrome.omnibox.setDefaultSuggestions =  jest.fn()
+chrome.tabs.create = jest.fn()
+chrome.omnibox.setDefaultSuggestions = jest.fn()
 chrome.omnibox.onInputChanged.addListener = jest.fn()
 chrome.omnibox.onInputEntered.addListener = jest.fn()
-//chrome.storage.session.set = jest.fn()
+// chrome.action.onClicked.addListener = jest.fn()
+// chrome.storage.session.set = jest.fn()
 
-import { handleInputChanged, handleInputEntered } from '../src/service_worker';
+import {handleInputChanged, handleInputEntered} from '../src/service_worker';
 
 describe('Omnibox integration tests', () => {
     beforeEach(() => {
@@ -23,9 +24,12 @@ describe('Omnibox integration tests', () => {
         handleInputChanged('', suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({ content: 'st' }),
-            expect.objectContaining({ content: 'g' })
+            expect.objectContaining({content: 'st'}),
+            expect.objectContaining({content: 'g'})
         ]);
+        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+            description: expect.stringContaining('pattern: st | tag: python')
+        });
     });
 
     test('handleInputChanged suggests matching patterns based on input', () => {
@@ -33,9 +37,22 @@ describe('Omnibox integration tests', () => {
         handleInputChanged('g', suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({ content: 'g' }),
-            expect.objectContaining({ content: 'st' })
+            expect.objectContaining({content: 'g'}),
+            expect.objectContaining({content: 'st'})
         ]);
+        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+            description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
+        });
+
+        handleInputChanged('s', suggestMock);
+
+        expect(suggestMock).toHaveBeenCalledWith([
+            expect.objectContaining({content: 'st'}),
+            expect.objectContaining({content: 'g'})
+        ]);
+        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+            description: expect.stringContaining('pattern: st | tag: python')
+        });
     });
 
     test('handleInputChanged suggests matching parameters for select type', () => {
@@ -43,9 +60,12 @@ describe('Omnibox integration tests', () => {
         handleInputChanged('g hk', suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({ content: 'hk' }),
-            expect.objectContaining({ content: 'jp' })
+            expect.objectContaining({content: 'hk'}),
+            expect.objectContaining({content: 'jp'})
         ]);
+        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+            description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
+        });
     });
 
     test('handleInputChanged provides input suggestion for input type', () => {
@@ -53,26 +73,11 @@ describe('Omnibox integration tests', () => {
         handleInputChanged('g hk UTF-8 ', suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({ description: "Please input any string" })
+            expect.objectContaining({description: "Please input any string"})
         ]);
-    });
-
-    test('handleInputEntered creates a tab with the correct URL', () => {
-        handleInputEntered('g hk UTF-8 OpenAI');
-
-        expect(chrome.tabs.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                url: 'https://google.com.hk/search?ie=UTF-8&q=OpenAI&hl=zh-cn'
-            })
-        );
-
-    });
-
-    test('handleInputEntered uses default values when not all parameters are provided', () => {
-        handleInputEntered('g hk');
-
-        expect(chrome.tabs.create).toHaveBeenCalledWith({
-            url: 'https://google.com.hk/search?ie=UTF-8&q=&hl=zh-cn'
+        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+            description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
         });
     });
+
 });

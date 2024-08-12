@@ -70,6 +70,7 @@ class JsonVariableResolver {
                     if (match) {
                         variablesToResolve.push({
                             path: newPath,
+                            parent: obj,
                             variablePath: match[1],
                             originalValue: value
                         });
@@ -97,11 +98,8 @@ class JsonVariableResolver {
                 throw new Error(errorMessage);
             }
 
-            let currentObj = root;
-            for (let i = 0; i < variable.path.length - 1; i++) {
-                currentObj = currentObj[variable.path[i]];
-            }
-            currentObj[variable.path[variable.path.length - 1]] = JSON.parse(JSON.stringify(resolvedValue));
+            let parentObj = variable.parent;
+            parentObj[variable.path[variable.path.length - 1]] = JSON.parse(JSON.stringify(resolvedValue));
             this.resolvedCount++;
         }
     }

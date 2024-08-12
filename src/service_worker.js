@@ -7,10 +7,10 @@ import * as jvr from "./json_var_resolver.js";
 const defaultCfg = {
     "var": {
         "so_tag": [
-            { value: "python", keyword: "python" },
-            { value: "golang", keyword: "golang" },
-            { value: "java", keyword: "java" },
-            { value: "javascript", keyword: "javascript" },
+            {value: "python", keyword: "python"},
+            {value: "golang", keyword: "golang"},
+            {value: "java", keyword: "java"},
+            {value: "javascript", keyword: "javascript"},
         ]
     },
     pattern: [
@@ -74,8 +74,8 @@ let cfg = jvr.resolve(defaultCfg)
 async function loadConfig() {
     try {
         // jest-chrome not support storage session API
-        if (typeof process === 'undefined' || process.env.JEST_WORKER_ID === undefined) {
-            chrome.storage.session.set({ defaultCfg: defaultCfg })
+        if (!inTest()) {
+            chrome.storage.session.set({defaultCfg: defaultCfg})
             const result = await chrome.storage.sync.get(['userConfig']);
             cfg = jvr.resolve(result.userConfig || defaultCfg);
             console.log("Configuration loaded:", cfg);
@@ -126,19 +126,20 @@ function getSuggestions(input, items, itemType) {
     items.forEach(item => {
         let match = fuzzysort.single(input, item.keyword);
         if (match) {
+            let highlight = highlightMatch(item.keyword, match);
             matchedResults.push({
                 score: match._score,
-                content: itemType === 'pattern' ? item.keyword : item.keyword,
+                content: item.keyword,
                 description: itemType === 'pattern'
-                ? `pattern: ${highlightMatch(item.keyword, match)} - ${item.desc}`
-                : `${itemType}: ${highlightMatch(item.keyword, match)} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
+                    ? `pattern: ${highlight} - ${item.desc}`
+                    : `${itemType}: ${highlight} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
             });
         } else {
             unmatchedResults.push({
-                content: itemType === 'pattern' ? item.keyword : item.keyword,
+                content: item.keyword,
                 description: itemType === 'pattern'
-                ? `pattern: ${item.keyword} - ${item.desc}`
-                : `${itemType}: ${item.keyword} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
+                    ? `pattern: ${item.keyword} - ${item.desc}`
+                    : `${itemType}: ${item.keyword} - ${Array.isArray(item.value) ? item.value.join(', ') : item.value}`
             });
         }
     });
@@ -148,7 +149,7 @@ function getSuggestions(input, items, itemType) {
 
     // Strip out the score before returning
     let finalMatchedResults = matchedResults.map(result => {
-        const { score, ...rest } = result; // Remove score property
+        const {score, ...rest} = result; // Remove score property
         return rest;
     });
 
@@ -158,58 +159,68 @@ function getSuggestions(input, items, itemType) {
 // 处理输入并生成补全数组
 function processInput(text) {
     let parts = text.trim().split(' ');
-    if (text.endsWith(' ')) parts.push(''); // 如果最后是空格，表示已经开始输入下一个元素
+    if (text.endsWith(' ')) parts.push('');
 
     let command = parts[0];
-    let config = cfg.pattern.find(c => c.keyword === command);
-    let completionArray = [];
+    let bestMatchConfig = cfg.pattern[0];
+    let bestMatchScore = -Infinity;
 
-    if (config) {
-        let params = config.params;
+    cfg.pattern.forEach(c => {
+        let match = fuzzysort.single(command, c.keyword);
+        if (match && match.score > bestMatchScore) {
+            bestMatchConfig = c;
+            bestMatchScore = match.score;
+        }
+    });
+
+    let patternCfg = bestMatchConfig;
+    let completionArray = [];
+    completionArray.push(`pattern: ${patternCfg.keyword}`);
+
+    if (patternCfg) {
+        let params = patternCfg.params;
         parts.slice(1).forEach((input, index) => {
             let param = params[index];
-            if (param.type === "select") {
+            if (param && param.type === "select") {
                 let bestMatch = param.values.find(valueObj =>
-                fuzzysort.single(input, valueObj.keyword)
+                    fuzzysort.single(input, valueObj.keyword)
                 );
-                completionArray.push(bestMatch ? bestMatch.value : param.values[0].value);
-            } else if (param.type === "input") {
-                completionArray.push(input);
+                completionArray.push(`${param.name}: ${bestMatch ? bestMatch.value : param.values[0].value}`);
+            } else if (param && param.type === "input") {
+                completionArray.push(`${param.name}: ${input}`);
             }
         });
 
-        // 对于尚未输入的参数，使用默认值补全
-        for (let i = completionArray.length; i < params.length; i++) {
-            completionArray.push(params[i].type === 'select' ? params[i].values[0].value : '');
+        for (let i = completionArray.length-1; i < params.length; i++) {
+            completionArray.push(`${params[i].name}: ${params[i].type === 'select' ? params[i].values[0].value : ''}`);
         }
     }
 
-    return { parts, completionArray };
+    return {parts, completionArray, patternCfg};
 }
+
 
 // Listener方法: 处理omnibox输入
 export function handleInputChanged(text, suggest) {
     console.log("User input: ", text);
 
-    let { parts, completionArray } = processInput(text);
+    let {parts, completionArray, patternCfg} = processInput(text);
+    let suggestions;
     if (parts.length === 0) {
-        // those code will not run, since empty text still prodcue one empty
+        // those code will not run, since empty text still produce one empty
         // element in parts
-        let suggestions = getSuggestions('', cfg.pattern, 'pattern');
-        suggest(suggestions);
+        suggestions = getSuggestions('', cfg.pattern, 'pattern');
     } else if (parts.length === 1) {
         // 输入了第一个部分时，提示匹配的pattern
-        let suggestions = getSuggestions(parts[0], cfg.pattern, 'pattern');
-        suggest(suggestions);
+        suggestions = getSuggestions(parts[0], cfg.pattern, 'pattern');
     } else {
         // 输入了pattern和参数，提供参数的suggestion
-        let command = parts[0];
-        let config = cfg.pattern.find(c => c.keyword === command);
+        let config = cfg.pattern.find(c => c.keyword === patternCfg.keyword);
         if (!config) return;
 
         let currentParamIndex = parts.length - 2;
         let currentParam = config.params[currentParamIndex];
-        let suggestions = [];
+        suggestions = [];
 
         if (currentParam && currentParam.type === "select") {
             let input = parts[currentParamIndex + 1] || '';
@@ -220,13 +231,13 @@ export function handleInputChanged(text, suggest) {
                 description: "Please input any string"
             });
         }
-
-        // 显示默认suggestion
-        chrome.omnibox.setDefaultSuggestion({
-            description: completionArray.join(' | ')
-        });
-        suggest(suggestions);
     }
+
+    // 显示默认suggestion
+    chrome.omnibox.setDefaultSuggestion({
+        description: completionArray.join(' | ')
+    });
+    suggest(suggestions);
 }
 
 
@@ -282,20 +293,24 @@ export function handleInputEntered(text) {
 
         // 遍历数组中的每个值并替换对应的占位符
         valuesArray.forEach(value => {
-        url = url.replace(`\${${key}}`, value);
-    });
-}
+            url = url.replace(`\${${key}}`, value);
+        });
+    }
 
-console.log("Final URL: ", url);
+    console.log("Final URL: ", url);
 
 // 打开新标签页
-chrome.tabs.create({ url: url });
-console.log("created URL: ", url);
+    chrome.tabs.create({url: url});
+    console.log("created URL: ", url);
+}
+
+function inTest() {
+    return typeof process != 'undefined' && process.env.JEST_WORKER_ID !== undefined
 }
 
 // 注册事件
 chrome.omnibox.onInputChanged.addListener(handleInputChanged);
 chrome.omnibox.onInputEntered.addListener(handleInputEntered);
-chrome.action.onClicked.addListener(() => {
-    chrome.runtime.openOptionsPage();
-});
+if (!inTest()) {
+    chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
+}
