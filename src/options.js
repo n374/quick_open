@@ -1,4 +1,5 @@
 import * as jvr from "./json_var_resolver.js";
+
 // Utility function to merge default config with user config
 function mergeConfig(userConfig, defaultConfig) {
     return userConfig || defaultConfig;
@@ -7,10 +8,9 @@ function mergeConfig(userConfig, defaultConfig) {
 // Load the configuration from Chrome's storage or fallback to the default configuration
 async function loadConfig() {
     try {
-        const result = await chrome.storage.sync.get(['userConfig']);
+        const userConfig = await chrome.storage.sync.get(['userConfig']);
         const defaultCfg = await chrome.storage.session.get(['defaultCfg']);
-        const config = mergeConfig(result.userConfig, defaultCfg.defaultCfg);
-        document.getElementById('config-input').value = JSON.stringify(config, null, 4);
+        document.getElementById('config-input').value = userConfig.userConfig || defaultCfg.defaultCfg;
     } catch (error) {
         console.error("Failed to load configuration:", error);
     }
@@ -19,8 +19,9 @@ async function loadConfig() {
 // Save the user configuration to Chrome's storage
 async function saveConfig() {
     try {
-        const userConfig = JSON.parse(document.getElementById('config-input').value);
-        jvr.resolve(userConfig);
+        var userConfig = document.getElementById('config-input').value;
+        const userConfigObj = JSON.parse(userConfig);
+        jvr.resolve(userConfigObj);
         await chrome.storage.sync.set({ userConfig });
         alert('Configuration saved successfully!');
     } catch (e) {

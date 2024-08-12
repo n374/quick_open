@@ -75,9 +75,9 @@ async function loadConfig() {
     try {
         // jest-chrome not support storage session API
         if (!inTest()) {
-            chrome.storage.session.set({defaultCfg: defaultCfg})
+            chrome.storage.session.set({defaultCfg: JSON.stringify(defaultCfg, null, 4)})
             const result = await chrome.storage.sync.get(['userConfig']);
-            cfg = jvr.resolve(result.userConfig || defaultCfg);
+            cfg = jvr.resolve(JSON.parse(result.userConfig) || defaultCfg);
             console.log("Configuration loaded:", cfg);
         }
     } catch (error) {
