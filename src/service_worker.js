@@ -204,9 +204,7 @@ export function handleInputChanged(text, suggest) {
     suggest(suggestions);
 }
 
-export function handleInputEntered(text) {
-    console.log("User submitted: ", text);
-
+export function handleInputEntered(text, disposition) {
     const { sortedPatterns, sortedParams } = handleInput(text);
     let url = sortedPatterns[0].value.url;
     sortedParams.forEach(param => {
@@ -215,7 +213,11 @@ export function handleInputEntered(text) {
     });
 
     console.log("Final URL: ", url);
-    chrome.tabs.create({url: url});
+    if (disposition === "currentTab") {
+        chrome.tabs.update(undefined, {url: url});
+    } else {
+        chrome.tabs.create({url: url});
+    }
 }
 
 function inTest() {
