@@ -21,62 +21,101 @@ describe('Omnibox integration tests', () => {
 
     test('handleInputChanged suggests patterns when no input is provided', () => {
         const suggestMock = jest.fn();
-        handleInputChanged('', suggestMock);
+        var text = '';
+        handleInputChanged(text, suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({content: 'st'}),
-            expect.objectContaining({content: 'g'})
+            expect.objectContaining({content: 'st', description: 'pattern: st - stackoverflow by tag'}),
+            expect.objectContaining({content: 'g', description: 'pattern: g - google'}),
         ]);
         expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
             description: expect.stringContaining('pattern: st | tag: python')
+        });
+
+        handleInputEntered(text);
+        expect(chrome.tabs.create).toHaveBeenCalledWith({
+            url: 'https://stackoverflow.com/questions/tagged/python'
         });
     });
 
     test('handleInputChanged suggests matching patterns based on input', () => {
         const suggestMock = jest.fn();
-        handleInputChanged('g', suggestMock);
+        {
+            var text = 'g';
+            handleInputChanged(text, suggestMock);
 
-        expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({content: 'g'}),
-            expect.objectContaining({content: 'st'})
-        ]);
-        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
-            description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
-        });
+            expect(suggestMock).toHaveBeenCalledWith([
+                expect.objectContaining({content: 'g', description: 'pattern: <match>g</match> - google'}),
+                expect.objectContaining({content: 'st', description: 'pattern: st - stackoverflow by tag'})
+            ]);
+            expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+                description: 'pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: '
+            });
 
-        handleInputChanged('s', suggestMock);
+            handleInputEntered(text);
+            expect(chrome.tabs.create).toHaveBeenCalledWith({
+                url: 'https://google.com.hk/search?ie=UTF-8&q=&hl=zh-cn'
+            });
+        }
 
-        expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({content: 'st'}),
-            expect.objectContaining({content: 'g'})
-        ]);
-        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
-            description: expect.stringContaining('pattern: st | tag: python')
-        });
+        {
+            var text = 's';
+            handleInputChanged(text, suggestMock);
+
+            expect(suggestMock).toHaveBeenCalledWith([
+                expect.objectContaining({
+                    content: 'st',
+                    description: 'pattern: <match>s</match>t - stackoverflow by tag'
+                }),
+                expect.objectContaining({content: 'g', description: 'pattern: g - google'})
+            ]);
+            expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+                description: expect.stringContaining('pattern: st | tag: python')
+            });
+            handleInputEntered(text);
+            expect(chrome.tabs.create).toHaveBeenCalledWith({
+                url: 'https://google.com.hk/search?ie=UTF-8&q=&hl=zh-cn'
+            });
+        }
     });
 
     test('handleInputChanged suggests matching parameters for select type', () => {
         const suggestMock = jest.fn();
-        handleInputChanged('g hk', suggestMock);
+        var text = 'g hk';
+        handleInputChanged(text, suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({content: 'hk'}),
-            expect.objectContaining({content: 'jp'})
+            expect.objectContaining({
+                content: 'g hk',
+                description: 'location: <match>h</match><match>k</match> - google.com.hk, zh-cn'
+            }),
+            expect.objectContaining({content: 'g jp', description: 'location: jp - google.com.jp, jp'}),
         ]);
         expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
             description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
+        });
+
+        handleInputEntered(text);
+        expect(chrome.tabs.create).toHaveBeenCalledWith({
+            url: 'https://google.com.hk/search?ie=UTF-8&q=&hl=zh-cn'
         });
     });
 
     test('handleInputChanged provides input suggestion for input type', () => {
         const suggestMock = jest.fn();
-        handleInputChanged('g hk UTF-8 ', suggestMock);
+        var text = 'g h UTF-8 ';
+        handleInputChanged(text, suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({description: "Please input any string"})
+            expect.objectContaining({content: text, description: "Please input any string"})
         ]);
         expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
             description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
+        });
+
+        handleInputEntered(text);
+        expect(chrome.tabs.create).toHaveBeenCalledWith({
+            url: 'https://google.com.hk/search?ie=UTF-8&q=&hl=zh-cn'
         });
     });
 
