@@ -172,7 +172,7 @@ export function handleInputChanged(text, suggest) {
     const matchedPattern = sortedPatterns[0]
     const defaultSuggestion = [
         `pattern: ${matchedPattern.keyword}`,
-        ...sortedParams.map((param, index) =>
+        ...sortedParams.map((param) =>
             `${param.name}: ${param.sortedValues[0]?.value || ''}`
         )
     ].join(' | ');
@@ -182,7 +182,7 @@ export function handleInputChanged(text, suggest) {
     let suggestions;
     if (currentParamIndex === -1) {
         suggestions = sortedPatterns.map(p => ({
-            content: p.keyword,
+            content: p.keyword + " ",
             description: `pattern: ${p.highlight} - ${p.value.desc}`
         }));
         suggest(suggestions)
