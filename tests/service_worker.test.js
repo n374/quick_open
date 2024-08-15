@@ -25,11 +25,11 @@ describe('Omnibox integration tests', () => {
         handleInputChanged(text, suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({content: 'st', description: 'pattern: st - stackoverflow by tag'}),
-            expect.objectContaining({content: 'g', description: 'pattern: g - google'}),
+            {content: 'st', description: 'pattern: st - stackoverflow by tag'},
+            {content: 'g', description: 'pattern: g - google'},
         ]);
         expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
-            description: expect.stringContaining('pattern: st | tag: python')
+            description: 'pattern: st | tag: python'
         });
 
         handleInputEntered(text);
@@ -45,8 +45,8 @@ describe('Omnibox integration tests', () => {
             handleInputChanged(text, suggestMock);
 
             expect(suggestMock).toHaveBeenCalledWith([
-                expect.objectContaining({content: 'g', description: 'pattern: <match>g</match> - google'}),
-                expect.objectContaining({content: 'st', description: 'pattern: st - stackoverflow by tag'})
+                {content: 'g', description: 'pattern: <match>g</match> - google'},
+                {content: 'st', description: 'pattern: st - stackoverflow by tag'}
             ]);
             expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
                 description: 'pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: '
@@ -63,14 +63,14 @@ describe('Omnibox integration tests', () => {
             handleInputChanged(text, suggestMock);
 
             expect(suggestMock).toHaveBeenCalledWith([
-                expect.objectContaining({
+                {
                     content: 'st',
                     description: 'pattern: <match>s</match>t - stackoverflow by tag'
-                }),
-                expect.objectContaining({content: 'g', description: 'pattern: g - google'})
+                },
+                {content: 'g', description: 'pattern: g - google'}
             ]);
             expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
-                description: expect.stringContaining('pattern: st | tag: python')
+                description: 'pattern: st | tag: python'
             });
             handleInputEntered(text);
             expect(chrome.tabs.create).toHaveBeenCalledWith({
@@ -85,14 +85,14 @@ describe('Omnibox integration tests', () => {
         handleInputChanged(text, suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({
+            {
                 content: 'g hk',
                 description: 'location: <match>h</match><match>k</match> - google.com.hk, zh-cn'
-            }),
-            expect.objectContaining({content: 'g jp', description: 'location: jp - google.com.jp, jp'}),
+            },
+            {content: 'g jp', description: 'location: jp - google.com.jp, jp'},
         ]);
         expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
-            description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
+            description: 'pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: '
         });
 
         handleInputEntered(text);
@@ -107,10 +107,10 @@ describe('Omnibox integration tests', () => {
         handleInputChanged(text, suggestMock);
 
         expect(suggestMock).toHaveBeenCalledWith([
-            expect.objectContaining({content: text, description: "Please input any string"})
+            {content: text, description: `search: <match>please input any string</match> - input`}
         ]);
         expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
-            description: expect.stringContaining('pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: ')
+            description: 'pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: '
         });
 
         handleInputEntered(text);
@@ -119,4 +119,21 @@ describe('Omnibox integration tests', () => {
         });
     });
 
+    test('provides input suggestion for input type', () => {
+        const suggestMock = jest.fn();
+        var text = 'g h UTF-8 hello';
+        handleInputChanged(text, suggestMock);
+
+        expect(suggestMock).toHaveBeenCalledWith([
+            {content: text, description: "search: <match>hello</match> - input"}
+        ]);
+        expect(chrome.omnibox.setDefaultSuggestion).toHaveBeenCalledWith({
+            description: 'pattern: g | location: google.com.hk,zh-cn | ie: UTF-8 | search: hello'
+        });
+
+        handleInputEntered(text);
+        expect(chrome.tabs.create).toHaveBeenCalledWith({
+            url: 'https://google.com.hk/search?ie=UTF-8&q=hello&hl=zh-cn'
+        });
+    });
 });

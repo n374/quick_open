@@ -135,7 +135,7 @@ function handleInput(text) {
     let parts = text.trim().split(' ');
     if (text.endsWith(' ')) parts.push('');
 
-    const patternList = cfg.pattern.map(p => ({ keyword: p.keyword, value: p }));
+    const patternList = cfg.pattern.map(p => ({keyword: p.keyword, value: p}));
     const sortedPatterns = sort(parts[0], patternList);
     const matchedPattern = sortedPatterns[0].value;
 
@@ -144,17 +144,18 @@ function handleInput(text) {
     while (paramInputs.length < params.length) paramInputs.push('');
 
     const sortedParams = params.map((param, index) => {
+        var input = paramInputs[index];
         if (param.type === "select") {
             return {
                 ...param,
-                sortedValues: sort(paramInputs[index], param.values)
-            };
-        } else {
-            return {
-                ...param,
-                sortedValues: []
+                sortedValues: sort(input, param.values)
             };
         }
+        // for input type
+        return {
+            ...param,
+            sortedValues: [{highlight: `<match>${input || "please input any string"}</match>`, keyword: input, value: input}]
+        };
     });
 
     return {
@@ -167,18 +168,16 @@ function handleInput(text) {
 export function handleInputChanged(text, suggest) {
     console.log("User input: ", text);
 
-    const { sortedPatterns, sortedParams, currentParamIndex } = handleInput(text);
+    const {sortedPatterns, sortedParams, currentParamIndex} = handleInput(text);
     const matchedPattern = sortedPatterns[0]
     const defaultSuggestion = [
         `pattern: ${matchedPattern.keyword}`,
         ...sortedParams.map((param, index) =>
-            `${param.name}: ${index <= currentParamIndex ? 
-                (param.sortedValues[0]?.value || '') : 
-                (param.type === 'select' ? param.values[0].value : '')}`
+            `${param.name}: ${param.sortedValues[0]?.value || ''}`
         )
     ].join(' | ');
 
-    chrome.omnibox.setDefaultSuggestion({ description: defaultSuggestion });
+    chrome.omnibox.setDefaultSuggestion({description: defaultSuggestion});
 
     let suggestions;
     if (currentParamIndex === -1) {
@@ -186,26 +185,29 @@ export function handleInputChanged(text, suggest) {
             content: p.keyword,
             description: `pattern: ${p.highlight} - ${p.value.desc}`
         }));
-    } else {
-        const currentParam = sortedParams[currentParamIndex];
-        if (currentParam.type === "select") {
-            suggestions = currentParam.sortedValues.map(v => ({
-                content: `${text.split(' ').slice(0, currentParamIndex + 1).join(' ')} ${v.keyword}`,
-                description: `${currentParam.name}: ${v.highlight} - ${Array.isArray(v.value) ? v.value.join(', ') : v.value}`
-            }));
-        } else {
-            suggestions = [{
-                content: text,
-                description: "Please input any string"
-            }];
-        }
+        suggest(suggestions)
+        return
+    }
+    const currentParam = sortedParams[currentParamIndex];
+    if (currentParam.type === "select") {
+        suggestions = currentParam.sortedValues.map(v => ({
+            content: `${text.split(' ').slice(0, currentParamIndex + 1).join(' ')} ${v.keyword}`,
+            description: `${currentParam.name}: ${v.highlight} - ${Array.isArray(v.value) ? v.value.join(', ') : v.value}`
+        }));
+        suggest(suggestions)
+        return
     }
 
-    suggest(suggestions);
+    // for input type
+    suggestions = currentParam.sortedValues.map(v => ({
+        content: `${text.split(' ').slice(0, currentParamIndex + 1).join(' ')} ${v.keyword}`,
+        description: `${currentParam.name}: ${v.highlight} - input`
+    }));
+    suggest(suggestions)
 }
 
 export function handleInputEntered(text, disposition) {
-    const { sortedPatterns, sortedParams } = handleInput(text);
+    const {sortedPatterns, sortedParams} = handleInput(text);
     let url = sortedPatterns[0].value.url;
     sortedParams.forEach(param => {
         const value = param.sortedValues[0]?.value || "";
