@@ -3,14 +3,14 @@
   "description": "quick open a link by select params",
   "version": "0.1",
   "background": {
-    "service_worker": "src/service_worker.js",
+    "service_worker": "src/dist/service_worker.bundle.js",
     "type": "module"
   },
   "action": {
     "default_icon": "src/dist/icon.png"
   },
   "omnibox": {
-    "keyword": "o"
+    "keyword": "q"
   },
   "permissions": [
     "storage"
