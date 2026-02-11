@@ -3,13 +3,25 @@ import * as jvr from "./json_var_resolver.js";
 import defaultCfg from './config.json';
 
 let cfg = jvr.resolve(defaultCfg)
+const storageModeKey = 'storageMode';
+
+async function getStorageMode() {
+    const result = await chrome.storage.local.get([storageModeKey]);
+    return result[storageModeKey] || 'sync';
+}
+
+function getStorageArea(mode) {
+    return mode === 'local' ? chrome.storage.local : chrome.storage.sync;
+}
 
 async function loadConfig() {
     try {
         // jest-chrome not support storage session API
         if (!inTest()) {
             chrome.storage.session.set({defaultCfg: JSON.stringify(defaultCfg, null, 4)})
-            const result = await chrome.storage.local.get(['userConfig']);
+            const mode = await getStorageMode();
+            const area = getStorageArea(mode);
+            const result = await area.get(['userConfig']);
             let userConfig = null;
             if (result.userConfig) {
                 try {
@@ -31,9 +43,23 @@ async function loadConfig() {
     }
 }
 
-chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.userConfig) {
-        cfg = jvr.resolve(changes.userConfig.newValue || defaultCfg);
+chrome.storage.onChanged.addListener(async (changes, area) => {
+    if (area === 'local' && changes.storageMode) {
+        await loadConfig();
+        return;
+    }
+    const mode = await getStorageMode();
+    const targetArea = mode === 'local' ? 'local' : 'sync';
+    if (area === targetArea && changes.userConfig) {
+        let userConfig = null;
+        if (changes.userConfig.newValue) {
+            try {
+                userConfig = JSON.parse(changes.userConfig.newValue);
+            } catch (e) {
+                console.error("Failed to parse userConfig:", e);
+            }
+        }
+        cfg = jvr.resolve(userConfig || defaultCfg);
         console.log("Configuration updated:", cfg);
     }
 });
