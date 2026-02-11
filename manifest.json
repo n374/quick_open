@@ -3,7 +3,7 @@
   "description": "quick open a link by select params",
   "version": "0.1",
   "background": {
-    "service_worker": "src/dist/service_worker.bundle.js",
+    "service_worker": "src/service_worker.js",
     "type": "module"
   },
   "action": {
